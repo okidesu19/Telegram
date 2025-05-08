@@ -2,7 +2,9 @@ name: Android Docker Build
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
@@ -12,31 +14,25 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Setup Buildah
-      uses: redhat-actions/buildah-setup@v1
-      with:
-        version: latest
-        
-    - name: Build image
+    - name: Build Docker image
+      run: docker build -t android-builder .
+      
+    - name: Run Docker container
       run: |
-        buildah bud -t android-builder .
+        docker run \
+          --name android-build \
+          -v ${{ github.workspace }}:/home/source \
+          android-builder
         
-    - name: Create container
+    - name: Save artifacts
+      if: ${{ always() }}
       run: |
-        container=$(buildah from android-builder)
-        buildah copy $container ${{ github.workspace }} /home/source
-        
-    - name: Run build commands
-      run: |
-        buildah run $container sh -c "mkdir -p /home/source/TMessagesProj/build/outputs/apk"
-        buildah run $container sh -c "cd /home/gradle && gradle :TMessagesProj_App:assembleAfatRelease"
-        
-    - name: Extract artifacts
-      run: |
-        buildah unshare --mount sh -c "cp -r \$(buildah mount $container)/home/source/TMessagesProj/build/outputs artifacts"
+        mkdir -p artifacts
+        cp -R ${{ github.workspace }}/TMessagesProj/build/outputs/ artifacts/
         
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: android-build-outputs
         path: artifacts/
+        if-no-files-found: error
