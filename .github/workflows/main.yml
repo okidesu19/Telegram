@@ -1,16 +1,11 @@
-name: Docker Build (Manual)
+name: Android Docker CI
 
 on:
-  workflow_dispatch:
-    inputs:
-      build-args:
-        description: 'Additional Docker build args (optional)'
-        required: false
-        default: ''
-      target:
-        description: 'Docker build target (optional)'
-        required: false
-        default: ''
+ workflow_dispatch:
+ push:
+  branches: [ main ]
+ pull_request:
+  branches: [ main ]
 
 jobs:
   build:
@@ -31,23 +26,18 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_TOKEN }}
       
     - name: Build Docker image
-      run: |
-        docker build \
-          --tag android-builder \
-          ${{ github.event.inputs.build-args && '--build-arg ' + github.event.inputs.build-args || '' }} \
-          ${{ github.event.inputs.target && '--target ' + github.event.inputs.target || '' }} \
-          .
+      run: docker build -t android-builder .
       
-    - name: Run container and build Android project
+    - name: Run build in container
       run: |
         docker run --rm \
           -v "$(pwd):/home/source" \
           android-builder
-      
+        
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: android-build-outputs
+        name: apk-output
         path: |
           TMessagesProj/build/outputs/apk/
           TMessagesProj/build/outputs/bundle/
