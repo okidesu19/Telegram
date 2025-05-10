@@ -1,18 +1,44 @@
-name: Docker Image CI
+name: Docker Build and Run
 
 on:
   push:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  workflow_dispatch:
 
 jobs:
-
-  build:
-
+  build-and-run:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: |
+        docker build -t my-android-builder .
+        
+    - name: Run Docker container
+      run: |
+        # Buat direktori output
+        mkdir -p ./build-outputs/apk
+        mkdir -p ./build-outputs/bundle
+        mkdir -p ./build-outputs/native-debug-symbols
+        
+        # Jalankan container
+        docker run --rm \
+          -v $(pwd):/home/source \
+          -v $(pwd)/build-outputs/apk:/home/source/TMessagesProj/build/outputs/apk \
+          -v $(pwd)/build-outputs/bundle:/home/source/TMessagesProj/build/outputs/bundle \
+          -v $(pwd)/build-outputs/native-debug-symbols:/home/source/TMessagesProj/build/outputs/native-debug-symbols \
+          my-android-builder
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-outputs
+        path: |
+          ./build-outputs/apk
+          ./build-outputs/bundle
+          ./build-outputs/native-debug-symbols
