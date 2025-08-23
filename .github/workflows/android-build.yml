@@ -1,78 +1,94 @@
-name: Build Android Project
+name: Android Build with Docker
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main, master]
+    branches: [ main, master ]
+    tags: [ 'v*' ]
   pull_request:
-    branches: [main, master]
+    branches: [ main, master ]
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: true
-          lfs: false
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+        submodules: recursive
 
-      - name: Free up disk space
-        run: |
-          echo "🧹 Cleaning disk space..."
-          sudo apt-get clean
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          df -h
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        tags: telegram-build:latest
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
-      - name: Cache Android SDK
-        uses: actions/cache@v4
-        with:
-          path: /usr/local/android-sdk-linux
-          key: ${{ runner.os }}-android-sdk-${{ hashFiles('Dockerfile') }}
-          restore-keys: |
-            ${{ runner.os }}-android-sdk-
+    - name: Run Android build in container
+      run: |
+        docker run \
+          --rm \
+          --workdir /home/gradle \
+          --memory=8g \
+          --memory-swap=8g \
+          --cpus=4 \
+          -v "$PWD":/home/source \
+          telegram-build:latest
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+    - name: List build outputs
+      run: |
+        echo "Build outputs:"
+        find . -name "*.apk" -o -name "*.aab" | head -20
+        du -sh TMessagesProj/build/outputs/ || true
 
-      - name: Build Docker Image
-        run: |
-          docker build --cache-from=type=inline --cache-to=type=inline -t telegram-build .
+    - name: Upload APK artifacts
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: android-apks
+        path: |
+          TMessagesProj/build/outputs/apk/**/*.apk
+        retention-days: 7
 
-      - name: Run Build Command
-        run: |
-          echo "🚀 Building"
-          docker run --rm -v "$PWD":/home/gradle/ -w/home/gradle telegram-build gradle assembleRelease
+    - name: Upload AAB artifacts
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: android-aabs
+        path: |
+          TMessagesProj/build/outputs/bundle/**/*.aab
+        retention-days: 7
 
-      - name: Upload APK artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk-files
-          path: ${{ github.workspace }}/TMessagesProj/build/outputs/apk/**/*.apk
+    - name: Upload native debug symbols
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: native-debug-symbols
+        path: |
+          TMessagesProj/build/outputs/native-debug-symbols/**/*
+        retention-days: 7
 
-      - name: Upload Bundle artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: bundle-files
-          path: ${{ github.workspace }}/TMessagesProj/build/outputs/bundle/**/*.aab
+    - name: Clean up Docker
+      run: |
+        docker system prune -a -f
+        sudo rm -rf /tmp/*
 
-      - name: Upload Native Debug Symbols
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-debug-symbols
-          path: ${{ github.workspace }}/TMessagesProj/build/outputs/native-debug-symbols/**/*
+    - name: Notify success
+      if: success()
+      run: |
+        echo "✅ Build completed successfully!"
+        echo "Artifacts available in the artifacts section"
+
+    - name: Notify failure
+      if: failure()
+      run: |
+        echo "❌ Build failed!"
+        exit 1
