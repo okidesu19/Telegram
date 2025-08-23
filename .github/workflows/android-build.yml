@@ -10,12 +10,18 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90 
+    timeout-minutes: 90
 
     strategy:
       matrix:
-        module: ["TMessagesProj_App:assembleAfatRelease", "TMessagesProj_AppHuawei:assembleAfatRelease", "TMessagesProj_AppStandalone:assembleAfatStandalone"]
-      fail-fast: false  
+        module: [
+          "TMessagesProj_App:bundleBundleAfat_SDK23Release",
+          "TMessagesProj_App:bundleBundleAfatRelease",
+          "TMessagesProj_AppStandalone:assembleAfatStandalone",
+          "TMessagesProj_App:assembleAfatRelease",
+          "TMessagesProj_AppHuawei:assembleAfatRelease"
+        ]
+      fail-fast: false
 
     steps:
       - name: Checkout code
@@ -33,7 +39,6 @@ jobs:
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/local/share/boost
           df -h
-        
 
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
@@ -63,7 +68,23 @@ jobs:
       - name: Run Build Command
         run: |
           echo "🚀 Building ${{ matrix.module }}..."
-          docker run --rm -v "$PWD":/home/gradle -w /home/gradle telegram-build ./gradlew clean ${{ matrix.module }} --stacktrace --info
+          docker run --rm -v "$PWD":/home/gradle -w /home/gradle telegram-build /bin/sh -c "\
+            mkdir -p /home/source/TMessagesProj/build/outputs/apk && \
+            mkdir -p /home/source/TMessagesProj/build/outputs/bundle && \
+            mkdir -p /home/source/TMessagesProj/build/outputs/native-debug-symbols && \
+            cp -R /home/gradle/. /home/source && \
+            ./gradlew ${{ matrix.module }} --stacktrace --info && \
+            cp -R /home/gradle/TMessagesProj_App/build/outputs/* /home/source/TMessagesProj/build/outputs/ 2>/dev/null || true && \
+            cp -R /home/gradle/TMessagesProj_AppHuawei/build/outputs/* /home/source/TMessagesProj/build/outputs/ 2>/dev/null || true && \
+            cp -R /home/gradle/TMessagesProj_AppStandalone/build/outputs/* /home/source/TMessagesProj/build/outputs/ 2>/dev/null || true"
+
+      - name: Debug Output Directory
+        run: |
+          echo "📁 Checking output directories..."
+          ls -la TMessagesProj/build/outputs/ || echo "No outputs in TMessagesProj/build/outputs/"
+          ls -la TMessagesProj_App/build/outputs/ || echo "No outputs in TMessagesProj_App/build/outputs/"
+          ls -la TMessagesProj_AppHuawei/build/outputs/ || echo "No outputs in TMessagesProj_AppHuawei/build/outputs/"
+          ls -la TMessagesProj_AppStandalone/build/outputs/ || echo "No outputs in TMessagesProj_AppStandalone/build/outputs/"
 
       - name: Upload Build Artifacts
         if: always()
@@ -71,14 +92,15 @@ jobs:
         with:
           name: android-build-outputs-${{ matrix.module }}
           path: |
-            TMessagesProj/build/outputs/apk/
-            TMessagesProj/build/outputs/bundle/
-            TMessagesProj/build/outputs/native-debug-symbols/
+            TMessagesProj/build/outputs/
+            TMessagesProj_App/build/outputs/
+            TMessagesProj_AppHuawei/build/outputs/
+            TMessagesProj_AppStandalone/build/outputs/
           retention-days: 7
 
       - name: Show build summary
         if: always()
         run: |
           echo "📊 Build status: ${{ job.status }}"
-          echo "📁 Output directory contents:"
+          echo "📁 Final output directory contents:"
           ls -la TMessagesProj/build/outputs/ || echo "No outputs found"
