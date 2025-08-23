@@ -48,12 +48,7 @@ jobs:
       - name: Run Build Command with increased resources
         run: |
           echo "🚀 Starting build process..."
-          docker run --rm \
-            -v "$PWD":/home/source \
-            --memory="6g" \  
-            --swap="2g" \    
-            --cpus="2" \     
-            telegram-build:latest
+          docker run --rm -v "$PWD":/home/gradle/ -w /home/gradle telegram-build gradle assembleRelease 
 
       - name: Upload Build Artifacts
         if: success()
