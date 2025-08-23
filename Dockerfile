@@ -23,7 +23,6 @@ RUN yes | ${ANDROID_HOME}/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME 
         "platforms;android-${ANDROID_VERSION}" \
         "platform-tools" \
         "ndk;${ANDROID_NDK_VERSION}" && \
-
     rm -rf ${ANDROID_HOME}/cmdline-tools && \
     rm -rf ${ANDROID_HOME}/emulator && \
     rm -rf ${ANDROID_HOME}/system-images && \
