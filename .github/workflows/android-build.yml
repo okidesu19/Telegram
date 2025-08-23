@@ -1,48 +1,65 @@
 name: Build Android Project
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45 
+    timeout-minutes: 90  
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  
-          submodules: true 
-          lfs: false  
+          fetch-depth: 0
+          submodules: true
+          lfs: false
+          
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
-      - name: Free up disk space
-        run: |
-          echo "🧹 Cleaning disk space..."
-          sudo apt-get clean
-          sudo rm -rf /usr/local/lib/android/sdk/emulator/
-          sudo rm -rf /usr/local/lib/android/sdk/system-images/
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf /usr/local/lib/android/sdk/ndk
-          df -h
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/android-sdk-linux
+          key: ${{ runner.os }}-android-sdk-${{ hashFiles('Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+            
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
+        uses: docker/setup-buildx-action@v3
+        
       - name: Build Docker Image
         run: |
-          docker build -t telegram-build .
+          echo "🛠️ Building Docker image..."
+          docker build --cache-from=type=local,src=/tmp/.buildx-cache --cache-to=type=local,dest=/tmp/.buildx-cache -t telegram-build .
 
-      - name: Run Build Command with increased resources
+      - name: Run Build Command
         run: |
           echo "🚀 Starting build process..."
-          docker run --rm -v "$PWD":/home/gradle/ -w /home/gradle telegram-build gradle assembleRelease 
+          docker run --rm -v "$PWD:/home/source" telegram-build bash -c "cd /home/gradle && gradle :TMessagesProj_App:assembleAfatRelease --stacktrace --info"
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m"  # Optimasi Gradle
 
       - name: Upload Build Artifacts
         if: success()
@@ -58,5 +75,75 @@ jobs:
         if: always()
         run: |
           echo "📊 Build status: ${{ job.status }}"
+          echo "📁 Output directory contents:"
+          ls -la TMessagesProj/build/outputs/ || echo "No outputs found"
+
+  build-huawei:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: build 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+          lfs: false
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/android-sdk-linux
+          key: ${{ runner.os }}-android-sdk-${{ hashFiles('Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        run: |
+          echo "🛠️ Building Docker image..."
+          docker build --cache-from=type=local,src=/tmp/.buildx-cache --cache-to=type=local,dest=/tmp/.buildx-cache -t telegram-build .
+
+      - name: Run Build Command for Huawei
+        run: |
+          echo "🚀 Starting Huawei build process..."
+          docker run --rm -v "$PWD:/home/source" telegram-build bash -c "cd /home/gradle && gradle :TMessagesProj_AppHuawei:assembleAfatRelease --stacktrace --info"
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m"
+
+      - name: Upload Huawei Build Artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: huawei-build-outputs
+          path: |
+            TMessagesProj/build/outputs/apk/
+            TMessagesProj/build/outputs/bundle/
+          retention-days: 7
+
+      - name: Show Huawei build summary
+        if: always()
+        run: |
+          echo "📊 Huawei Build status: ${{ job.status }}"
           echo "📁 Output directory contents:"
           ls -la TMessagesProj/build/outputs/ || echo "No outputs found"
