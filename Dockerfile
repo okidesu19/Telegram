@@ -9,29 +9,35 @@ ENV ANDROID_VERSION=34
 ENV ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}/
 ENV PATH=${PATH}:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools
 
-RUN mkdir "$ANDROID_HOME" .android && \
-    cd "$ANDROID_HOME" && \
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y \
+    unzip \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+    
+RUN mkdir -p "$ANDROID_HOME" .android
+
+RUN cd "$ANDROID_HOME" && \
     curl -o sdk.zip $ANDROID_SDK_URL && \
-    unzip sdk.zip && \
+    unzip -q sdk.zip && \
     rm sdk.zip
 
-RUN yes | ${ANDROID_HOME}/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses && \
-    ${ANDROID_HOME}/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --update && \
-    ${ANDROID_HOME}/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME \
-        "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" \
-        "platforms;android-${ANDROID_VERSION}" \
-        "platform-tools" \
-        "ndk;${ANDROID_NDK_VERSION}" && \
-    rm -rf ${ANDROID_HOME}/cmdline-tools && \
-    rm -rf ${ANDROID_HOME}/emulator && \
-    rm -rf ${ANDROID_HOME}/system-images && \
-    rm -rf ${ANDROID_HOME}/sources && \
-    rm -rf ${ANDROID_HOME}/extras && \
-    find ${ANDROID_HOME} -name "*examples*" -type d -prune -exec rm -rf {} \; && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+RUN yes | ${ANDROID_HOME}/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses
+RUN ${ANDROID_HOME}/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --update
+
+RUN ${ANDROID_HOME}/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME \
+    "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" \
+    "platforms;android-${ANDROID_VERSION}" \
+    "platform-tools" \
+    "ndk;${ANDROID_NDK_VERSION}"
+
+RUN rm -rf ${ANDROID_HOME}/.temp && \
+    rm -rf ${ANDROID_HOME}/cmdline-tools/NOTICE.txt
 
 ENV PATH=${ANDROID_NDK_HOME}:$PATH
 ENV PATH=${ANDROID_NDK_HOME}/prebuilt/linux-x86_64/bin/:$PATH
 
-CMD ["/bin/sh", "-c", "mkdir -p /home/source/TMessagesProj/build/outputs/apk && mkdir -p /home/gradle/TMessagesProj/build/outputs/bundle && mkdir -p /home/source/TMessagesProj/build/outputs/native-debug-symbols && cp -R /home/source/. /home/gradle && cd /home/gradle && ./gradlew clean && ./gradlew :TMessagesProj_App:assembleAfatRelease && ./gradlew :TMessagesProj_AppHuawei:assembleAfatRelease && ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone && cp -R /home/gradle/TMessagesProj_App/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk && cp -R /home/gradle/TMessagesProj_AppHuawei/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk && cp -R /home/gradle/TMessagesProj_AppStandalone/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk && cp -R /home/gradle/TMessagesProj_App/build/outputs/bundle/. /home/source/TMessagesProj/build/outputs/bundle"]
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+CMD ["/entrypoint.sh"]
