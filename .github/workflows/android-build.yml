@@ -1,32 +1,7 @@
-name: Build Android Project - Manual Trigger
+name: Build Android Project
 
 on:
-  workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Branch to build'
-        required: true
-        default: 'main'
-        type: choice
-        options:
-          - main
-          - master
-          - dev
-      build_type:
-        description: 'Build type'
-        required: true
-        default: 'release'
-        type: choice
-        options:
-          - release
-          - debug
-      clean_cache:
-        description: 'Clean cache before build?'
-        required: true
-        default: 'true'
-        type: boolean
-
-  # Juga bisa trigger otomatis untuk branch tertentu
+  workflow_dispatch: 
   push:
     branches: [ main, master ]
   pull_request:
@@ -35,26 +10,26 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      BRANCH: ${{ github.event.inputs.branch || 'main' }}
-      BUILD_TYPE: ${{ github.event.inputs.build_type || 'release' }}
-      CLEAN_CACHE: ${{ github.event.inputs.clean_cache || 'true' }}
+    timeout-minutes: 45 
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.BRANCH }}
+          fetch-depth: 0  
+          submodules: true 
+          lfs: false  
 
       - name: Free up disk space
         run: |
-          echo "Cleaning up disk space..."
+          echo "🧹 Cleaning disk space..."
           sudo apt-get clean
-          sudo rm -rf /usr/local/lib/android/sdk/emulator
-          sudo rm -rf /usr/local/lib/android/sdk/system-images
+          sudo rm -rf /usr/local/lib/android/sdk/emulator/
+          sudo rm -rf /usr/local/lib/android/sdk/system-images/
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/lib/android/sdk/ndk
           df -h
 
       - name: Setup Docker Buildx
@@ -70,31 +45,29 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run Build Command
+      - name: Run Build Command with increased resources
         run: |
-          echo "Building branch: $BRANCH"
-          echo "Build type: $BUILD_TYPE"
-          echo "Clean cache: $CLEAN_CACHE"
-          
-          # Run docker with increased memory and disk space
+          echo "🚀 Starting build process..."
           docker run --rm \
             -v "$PWD":/home/source \
-            --memory="4g" \
-            --swap="2g" \
+            --memory="6g" \  
+            --swap="2g" \    
+            --cpus="2" \     
             telegram-build:latest
 
       - name: Upload Build Artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: android-build-artifacts
+          name: android-build-outputs
           path: |
             TMessagesProj/build/outputs/apk/
             TMessagesProj/build/outputs/bundle/
           retention-days: 7
 
-      - name: Show Build Results
+      - name: Show build summary
         if: always()
         run: |
-          echo "Build completed with status: ${{ job.status }}"
-          ls -la TMessagesProj/build/outputs/ || echo "No outputs directory"
+          echo "📊 Build status: ${{ job.status }}"
+          echo "📁 Output directory contents:"
+          ls -la TMessagesProj/build/outputs/ || echo "No outputs found"
