@@ -9,7 +9,6 @@ ENV ANDROID_VERSION=34
 ENV ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}/
 ENV PATH=${PATH}:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:${ANDROID_NDK_HOME}:${ANDROID_NDK_HOME}/prebuilt/linux-x86_64/bin/
 
-# Install dependencies and clean up in one layer to reduce image size
 RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     && apt-get clean \
@@ -43,4 +42,4 @@ ENV PATH=${PATH}:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:${ANDROID_
 
 WORKDIR /home/gradle
 
-CMD ["/bin/sh", "-c", "mkdir -p /home/source/TMessagesProj/build/outputs/apk && mkdir -p /home/gradle/TMessagesProj/build/outputs/bundle && mkdir -p /home/source/TMessagesProj/build/outputs/native-debug-symbols && cp -R /home/source/. /home/gradle && cd /home/gradle"]
+CMD ["/bin/sh", "-c", "mkdir -p /home/source/TMessagesProj/build/outputs/apk && mkdir -p /home/gradle/TMessagesProj/build/outputs/bundle && mkdir -p /home/source/TMessagesProj/build/outputs/native-debug-symbols && cp -R /home/gradle/. /home/source && cd /home/gradle"]
