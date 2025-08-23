@@ -11,9 +11,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Check out the code repository
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Build the Docker image
       - name: Build Docker Image
         uses: docker/build-push-action@v6
         with:
@@ -23,9 +25,7 @@ jobs:
           tags: telegram-build:latest
           cache-from: type=gha
 
+      # Run the build command using the built image
       - name: Run Build Command
-        uses: docker/run-action@v2
-        with:
-          image: telegram-build:latest
-          working-directory: /home/source
-          volumes: /home/source
+        run: |
+          docker run --rm -v "$PWD":/home/source telegram-build:latest
