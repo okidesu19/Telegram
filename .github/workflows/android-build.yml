@@ -1,5 +1,32 @@
-name: Build Android Project
+name: Build Android Project - Manual Trigger
+
 on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build'
+        required: true
+        default: 'main'
+        type: choice
+        options:
+          - main
+          - master
+          - dev
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+      clean_cache:
+        description: 'Clean cache before build?'
+        required: true
+        default: 'true'
+        type: boolean
+
+  # Juga bisa trigger otomatis untuk branch tertentu
   push:
     branches: [ main, master ]
   pull_request:
@@ -8,60 +35,66 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      BRANCH: ${{ github.event.inputs.branch || 'main' }}
+      BUILD_TYPE: ${{ github.event.inputs.build_type || 'release' }}
+      CLEAN_CACHE: ${{ github.event.inputs.clean_cache || 'true' }}
+
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Cache Gradle packages
-        uses: actions/cache@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          ref: ${{ env.BRANCH }}
 
-      - name: Cache Android SDK
-        uses: actions/cache@v3
+      - name: Free up disk space
+        run: |
+          echo "Cleaning up disk space..."
+          sudo apt-get clean
+          sudo rm -rf /usr/local/lib/android/sdk/emulator
+          sudo rm -rf /usr/local/lib/android/sdk/system-images
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          df -h
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v6
         with:
-          path: /usr/local/android-sdk-linux
-          key: android-sdk-34
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: telegram-build:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Set up Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Download Android SDK (if not cached)
-        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Run Build Command
         run: |
-          mkdir -p /usr/local/android-sdk-linux
-          cd /usr/local/android-sdk-linux
-          curl -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-7302050_latest.zip
-          unzip sdk.zip
-          rm sdk.zip
-          mv cmdline-tools cmdline-tools-temp
-          mkdir cmdline-tools
-          mv cmdline-tools-temp/latest cmdline-tools/
-          rmdir cmdline-tools-temp
-          sdkmanager="cmdline-tools/latest/bin/sdkmanager"
-          yes | $sdkmanager --licenses || true
-          $sdkmanager "build-tools;34.0.0" "platforms;android-34" "platform-tools" "ndk;21.4.7075529"
+          echo "Building branch: $BRANCH"
+          echo "Build type: $BUILD_TYPE"
+          echo "Clean cache: $CLEAN_CACHE"
+          
+          # Run docker with increased memory and disk space
+          docker run --rm \
+            -v "$PWD":/home/source \
+            --memory="4g" \
+            --swap="2g" \
+            telegram-build:latest
 
-      - name: Set ANDROID_HOME
-        run: |
-          echo "ANDROID_HOME=/usr/local/android-sdk-linux" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=/usr/local/android-sdk-linux" >> $GITHUB_ENV
-          echo "/usr/local/android-sdk-linux/platform-tools" >> $GITHUB_PATH
-
-      - name: Build APKs and Bundles
-        run: |
-          ./gradlew \
-            :TMessagesProj_App:bundleBundleAfat_SDK23Release \
-            :TMessagesProj_App:bundleBundleAfatRelease \
-            :TMessagesProj_AppStandalone:assembleAfatStandalone \
-            :TMessagesProj_App:assembleAfatRelease \
-            :TMessagesProj_AppHuawei:assembleAfatRelease \
-            --parallel --no-daemon
-
-      - name: Upload Artifacts
+      - name: Upload Build Artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          path: TMessagesProj_App/build/outputs/
+          name: android-build-artifacts
+          path: |
+            TMessagesProj/build/outputs/apk/
+            TMessagesProj/build/outputs/bundle/
+          retention-days: 7
+
+      - name: Show Build Results
+        if: always()
+        run: |
+          echo "Build completed with status: ${{ job.status }}"
+          ls -la TMessagesProj/build/outputs/ || echo "No outputs directory"
