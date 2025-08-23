@@ -1,0 +1,31 @@
+name: Build Android Project
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: telegram-build:latest
+          cache-from: type=gha
+
+      - name: Run Build Command
+        uses: docker/run-action@v2
+        with:
+          image: telegram-build:latest
+          working-directory: /home/source
+          volumes: /home/source
