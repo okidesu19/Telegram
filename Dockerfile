@@ -37,21 +37,4 @@ RUN yes | ${ANDROID_HOME}/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME 
 ENV PATH=${ANDROID_NDK_HOME}:$PATH
 ENV PATH=${ANDROID_NDK_HOME}/prebuilt/linux-x86_64/bin/:$PATH
 
-CMD ["/bin/sh", "-c", "
-    mkdir -p /home/source/TMessagesProj/build/outputs/apk && 
-    mkdir -p /home/gradle/TMessagesProj/build/outputs/bundle && 
-    mkdir -p /home/source/TMessagesProj/build/outputs/native-debug-symbols && 
-    cp -R /home/source/. /home/gradle && 
-    cd /home/gradle && 
-    # Clean gradle cache before build
-    ./gradlew clean && 
-    # Run only essential build tasks
-    ./gradlew :TMessagesProj_App:assembleAfatRelease && 
-    ./gradlew :TMessagesProj_AppHuawei:assembleAfatRelease && 
-    ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone && 
-    # Copy outputs
-    cp -R /home/gradle/TMessagesProj_App/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk && 
-    cp -R /home/gradle/TMessagesProj_AppHuawei/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk && 
-    cp -R /home/gradle/TMessagesProj_AppStandalone/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk && 
-    cp -R /home/gradle/TMessagesProj_App/build/outputs/bundle/. /home/source/TMessagesProj/build/outputs/bundle
-"]
+CMD ["/bin/sh", "-c", "mkdir -p /home/source/TMessagesProj/build/outputs/apk && mkdir -p /home/gradle/TMessagesProj/build/outputs/bundle && mkdir -p /home/source/TMessagesProj/build/outputs/native-debug-symbols && cp -R /home/source/. /home/gradle && cd /home/gradle && ./gradlew clean && ./gradlew :TMessagesProj_App:assembleAfatRelease && ./gradlew :TMessagesProj_AppHuawei:assembleAfatRelease && ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone && cp -R /home/gradle/TMessagesProj_App/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk && cp -R /home/gradle/TMessagesProj_AppHuawei/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk && cp -R /home/gradle/TMessagesProj_AppStandalone/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk && cp -R /home/gradle/TMessagesProj_App/build/outputs/bundle/. /home/source/TMessagesProj/build/outputs/bundle"]
