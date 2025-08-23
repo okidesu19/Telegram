@@ -56,9 +56,9 @@ jobs:
 
       - name: Run Build Command
         run: |
-          echo "🚀 Building ${{ matrix.module }}..."
-          docker run --rm -v "$PWD":/home/gradle -w /home/gradle telegram-build /bin/sh -c "\
-            
+          echo "🚀 Building"
+          docker run --rm -v "$PWD":/home/gradle/ -w/home/gradle telegram-build gradle assembleRelease
+
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
