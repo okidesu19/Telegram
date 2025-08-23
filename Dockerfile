@@ -30,7 +30,6 @@ RUN yes | ${ANDROID_HOME}/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME 
     rm -rf ${ANDROID_HOME}/sources && \
     rm -rf ${ANDROID_HOME}/extras && \
     find ${ANDROID_HOME} -name "*examples*" -type d -prune -exec rm -rf {} \; && \
-
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
