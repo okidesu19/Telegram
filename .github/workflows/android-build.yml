@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90  
+    timeout-minutes: 90 
 
     strategy:
       matrix:
@@ -53,20 +53,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-android-sdk-
 
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker Image
         run: |
-          docker build --cache-from=type=local,src=/tmp/.buildx-cache --cache-to=type=local,dest=/tmp/.buildx-cache -t telegram-build .
+          docker build --cache-from=type=inline --cache-to=type=inline -t telegram-build .
 
       - name: Run Build Command
         run: |
@@ -74,7 +66,7 @@ jobs:
           docker run --rm -v "$PWD":/home/gradle -w /home/gradle telegram-build ./gradlew clean ${{ matrix.module }} --stacktrace --info
 
       - name: Upload Build Artifacts
-        if: always() 
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: android-build-outputs-${{ matrix.module }}
