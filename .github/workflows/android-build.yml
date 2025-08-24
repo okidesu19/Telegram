@@ -3,26 +3,31 @@ name: Android Build
 on:
   workflow_dispatch:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: gradle:8.6.0-jdk17
-      options: --user root
-
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Setup JDK 17
+      uses: actions/setup-java@v5
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
     - name: Setup Android SDK
       run: |
-        apt-get update && apt-get install -y unzip
+        sudo apt-get update
+        sudo apt-get install -y unzip
         mkdir -p /usr/local/android-sdk-linux
         cd /usr/local/android-sdk-linux
+        ANDROID_SDK_URL="https://dl.google.com/android/repository/commandlinetools-linux-7302050_latest.zip"
         curl -o sdk.zip $ANDROID_SDK_URL
         unzip sdk.zip
         rm sdk.zip
@@ -34,20 +39,27 @@ jobs:
           "platforms;android-34" \
           "platform-tools" \
           "ndk;21.4.7075529"
-        cp $ANDROID_HOME/build-tools/30.0.3/dx $ANDROID_HOME/build-tools/34.0.0/dx
-        cp $ANDROID_HOME/build-tools/30.0.3/lib/dx.jar $ANDROID_HOME/build-tools/34.0.0/lib/dx.jar
+        sudo cp $ANDROID_HOME/build-tools/30.0.3/dx $ANDROID_HOME/build-tools/34.0.0/dx
+        sudo cp $ANDROID_HOME/build-tools/30.0.3/lib/dx.jar $ANDROID_HOME/build-tools/34.0.0/lib/dx.jar
       env:
-        ANDROID_SDK_URL: https://dl.google.com/android/repository/commandlinetools-linux-7302050_latest.zip
         ANDROID_HOME: /usr/local/android-sdk-linux
-        ANDROID_NDK_VERSION: 21.4.7075529
+
+    - name: Setup environment variables
+      run: |
+        echo "ANDROID_HOME=/usr/local/android-sdk-linux" >> $GITHUB_ENV
+        echo "ANDROID_NDK_HOME=/usr/local/android-sdk-linux/ndk/21.4.7075529" >> $GITHUB_ENV
+        echo "PATH=$PATH:/usr/local/android-sdk-linux/tools:/usr/local/android-sdk-linux/platform-tools:/usr/local/android-sdk-linux/ndk/21.4.7075529" >> $GITHUB_ENV
+
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: '8.6'
 
     - name: Build bundleBundleAfat_SDK23Release
-      run: |
-        gradle :TMessagesProj_App:bundleBundleAfat_SDK23Release
+      run: ./gradlew :TMessagesProj_App:bundleBundleAfat_SDK23Release
       env:
         ANDROID_HOME: /usr/local/android-sdk-linux
         ANDROID_NDK_HOME: /usr/local/android-sdk-linux/ndk/21.4.7075529
-        PATH: $PATH:/usr/local/android-sdk-linux/tools:/usr/local/android-sdk-linux/platform-tools
 
     - name: Upload bundleBundleAfat_SDK23Release
       uses: actions/upload-artifact@v4
@@ -56,8 +68,7 @@ jobs:
         path: TMessagesProj_App/build/outputs/
 
     - name: Build bundleBundleAfatRelease
-      run: |
-        gradle :TMessagesProj_App:bundleBundleAfatRelease
+      run: ./gradlew :TMessagesProj_App:bundleBundleAfatRelease
       env:
         ANDROID_HOME: /usr/local/android-sdk-linux
         ANDROID_NDK_HOME: /usr/local/android-sdk-linux/ndk/21.4.7075529
@@ -69,8 +80,7 @@ jobs:
         path: TMessagesProj_App/build/outputs/
 
     - name: Build assembleAfatStandalone
-      run: |
-        gradle :TMessagesProj_AppStandalone:assembleAfatStandalone
+      run: ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone
       env:
         ANDROID_HOME: /usr/local/android-sdk-linux
         ANDROID_NDK_HOME: /usr/local/android-sdk-linux/ndk/21.4.7075529
@@ -82,8 +92,7 @@ jobs:
         path: TMessagesProj_AppStandalone/build/outputs/
 
     - name: Build assembleAfatRelease
-      run: |
-        gradle :TMessagesProj_App:assembleAfatRelease
+      run: ./gradlew :TMessagesProj_App:assembleAfatRelease
       env:
         ANDROID_HOME: /usr/local/android-sdk-linux
         ANDROID_NDK_HOME: /usr/local/android-sdk-linux/ndk/21.4.7075529
@@ -95,8 +104,7 @@ jobs:
         path: TMessagesProj_App/build/outputs/
 
     - name: Build Huawei assembleAfatRelease
-      run: |
-        gradle :TMessagesProj_AppHuawei:assembleAfatRelease
+      run: ./gradlew :TMessagesProj_AppHuawei:assembleAfatRelease
       env:
         ANDROID_HOME: /usr/local/android-sdk-linux
         ANDROID_NDK_HOME: /usr/local/android-sdk-linux/ndk/21.4.7075529
