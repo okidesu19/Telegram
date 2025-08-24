@@ -21,12 +21,17 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
+    - name: Check disk space
+      run: |
+        df -h
+        du -sh /home/runner/* | sort -hr
+
     - name: Install required packages
       run: |
         sudo apt-get update
         sudo apt-get install -y unzip curl
 
-    - name: Setup Android SDK
+    - name: Setup Android SDK with minimal packages
       run: |
         # Create Android SDK directory
         mkdir -p ~/android-sdk
@@ -51,27 +56,22 @@ jobs:
       run: |
         yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
 
-    - name: Install Android packages
+    - name: Install only essential Android packages
       run: |
         $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "cmdline-tools;latest"
-        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --update
         $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
-          "build-tools;30.0.3" \
           "build-tools;34.0.0" \
           "platforms;android-34" \
           "platform-tools" \
-          "ndk;21.4.7075529" \
-          "cmake;3.22.1"
+          "ndk;21.4.7075529"
 
-    - name: Copy dx files (if needed)
+    - name: Clean up unnecessary SDK files
       run: |
-        # Check if files exist before copying
-        if [ -f "$ANDROID_HOME/build-tools/30.0.3/dx" ] && [ -d "$ANDROID_HOME/build-tools/34.0.0" ]; then
-          cp $ANDROID_HOME/build-tools/30.0.3/dx $ANDROID_HOME/build-tools/34.0.0/dx
-        fi
-        if [ -f "$ANDROID_HOME/build-tools/30.0.3/lib/dx.jar" ] && [ -d "$ANDROID_HOME/build-tools/34.0.0/lib" ]; then
-          cp $ANDROID_HOME/build-tools/30.0.3/lib/dx.jar $ANDROID_HOME/build-tools/34.0.0/lib/dx.jar
-        fi
+        # Remove unnecessary files to save space
+        rm -rf $HOME/android-sdk/cmdline-tools/latest/NOTICE.txt
+        rm -rf $HOME/android-sdk/cmdline-tools/latest/lib/*.jar
+        find $HOME/android-sdk -name "*.txt" -delete
+        find $HOME/android-sdk -name "*.md" -delete
 
     - name: Create local.properties file
       run: |
@@ -80,30 +80,20 @@ jobs:
         echo "Created local.properties:"
         cat local.properties
 
-    - name: Verify Android installation
-      run: |
-        echo "Android Home: $ANDROID_HOME"
-        echo "Android SDK Root: $ANDROID_SDK_ROOT"
-        echo "Android NDK Home: $ANDROID_NDK_HOME"
-        echo "PATH: $PATH"
-        ls -la $ANDROID_HOME
-        ls -la $ANDROID_HOME/build-tools/
-        ls -la $ANDROID_HOME/platforms/
-
-    - name: Setup Gradle
+    - name: Setup Gradle with caching
       uses: gradle/gradle-build-action@v2
       with:
         gradle-version: '8.6'
+        cache-disabled: false
+        cache-read-only: false
 
-    - name: Create output directories
+    - name: Clean project before build
       run: |
-        mkdir -p TMessagesProj/build/outputs/apk
-        mkdir -p TMessagesProj/build/outputs/bundle
-        mkdir -p TMessagesProj/build/outputs/native-debug-symbols
+        ./gradlew clean --no-daemon
 
     - name: Build bundleBundleAfat_SDK23Release
       run: |
-        ./gradlew :TMessagesProj_App:bundleBundleAfat_SDK23Release --no-daemon --stacktrace
+        ./gradlew :TMessagesProj_App:bundleBundleAfat_SDK23Release --no-daemon --stacktrace --console=plain
       env:
         ANDROID_HOME: $HOME/android-sdk
         ANDROID_SDK_ROOT: $HOME/android-sdk
@@ -114,13 +104,20 @@ jobs:
       with:
         name: bundle-sdk23-release
         path: |
-          TMessagesProj_App/build/outputs/
-          TMessagesProj/build/outputs/
+          TMessagesProj_App/build/outputs/bundle/
         if-no-files-found: warn
+
+    - name: Clean after first build
+      run: |
+        # Clean intermediate files to free up space
+        ./gradlew clean --no-daemon
+        rm -rf ~/.gradle/caches/transforms-*/
+        rm -rf ~/.gradle/caches/jars-*/
+        df -h
 
     - name: Build bundleBundleAfatRelease
       run: |
-        ./gradlew :TMessagesProj_App:bundleBundleAfatRelease --no-daemon --stacktrace
+        ./gradlew :TMessagesProj_App:bundleBundleAfatRelease --no-daemon --stacktrace --console=plain
       env:
         ANDROID_HOME: $HOME/android-sdk
         ANDROID_SDK_ROOT: $HOME/android-sdk
@@ -131,13 +128,19 @@ jobs:
       with:
         name: bundle-afat-release
         path: |
-          TMessagesProj_App/build/outputs/
-          TMessagesProj/build/outputs/
+          TMessagesProj_App/build/outputs/bundle/
         if-no-files-found: warn
+
+    - name: Clean after second build
+      run: |
+        ./gradlew clean --no-daemon
+        rm -rf ~/.gradle/caches/transforms-*/
+        rm -rf ~/.gradle/caches/jars-*/
+        df -h
 
     - name: Build assembleAfatStandalone
       run: |
-        ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone --no-daemon --stacktrace
+        ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone --no-daemon --stacktrace --console=plain
       env:
         ANDROID_HOME: $HOME/android-sdk
         ANDROID_SDK_ROOT: $HOME/android-sdk
@@ -148,13 +151,19 @@ jobs:
       with:
         name: afat-standalone
         path: |
-          TMessagesProj_AppStandalone/build/outputs/
-          TMessagesProj/build/outputs/
+          TMessagesProj_AppStandalone/build/outputs/apk/
         if-no-files-found: warn
+
+    - name: Clean after third build
+      run: |
+        ./gradlew clean --no-daemon
+        rm -rf ~/.gradle/caches/transforms-*/
+        rm -rf ~/.gradle/caches/jars-*/
+        df -h
 
     - name: Build assembleAfatRelease
       run: |
-        ./gradlew :TMessagesProj_App:assembleAfatRelease --no-daemon --stacktrace
+        ./gradlew :TMessagesProj_App:assembleAfatRelease --no-daemon --stacktrace --console=plain
       env:
         ANDROID_HOME: $HOME/android-sdk
         ANDROID_SDK_ROOT: $HOME/android-sdk
@@ -165,13 +174,19 @@ jobs:
       with:
         name: afat-release
         path: |
-          TMessagesProj_App/build/outputs/
-          TMessagesProj/build/outputs/
+          TMessagesProj_App/build/outputs/apk/
         if-no-files-found: warn
+
+    - name: Clean after fourth build
+      run: |
+        ./gradlew clean --no-daemon
+        rm -rf ~/.gradle/caches/transforms-*/
+        rm -rf ~/.gradle/caches/jars-*/
+        df -h
 
     - name: Build Huawei assembleAfatRelease
       run: |
-        ./gradlew :TMessagesProj_AppHuawei:assembleAfatRelease --no-daemon --stacktrace
+        ./gradlew :TMessagesProj_AppHuawei:assembleAfatRelease --no-daemon --stacktrace --console=plain
       env:
         ANDROID_HOME: $HOME/android-sdk
         ANDROID_SDK_ROOT: $HOME/android-sdk
@@ -182,19 +197,20 @@ jobs:
       with:
         name: huawei-afat-release
         path: |
-          TMessagesProj_AppHuawei/build/outputs/
-          TMessagesProj/build/outputs/
+          TMessagesProj_AppHuawei/build/outputs/apk/
         if-no-files-found: warn
+
+    - name: Final cleanup
+      run: |
+        df -h
+        du -sh ~/.gradle/ ~/android-sdk/ | sort -hr
 
     - name: Final artifacts summary
       run: |
         echo "=== Build Artifacts Summary ==="
         echo "APK files:"
-        find . -name "*.apk" -exec ls -la {} \;
+        find . -name "*.apk" -exec ls -la {} \; 2>/dev/null || true
         echo ""
         echo "AAB files:"
-        find . -name "*.aab" -exec ls -la {} \;
-        echo ""
-        echo "Output directories:"
-        find . -name "outputs" -type d -exec ls -la {} \;
+        find . -name "*.aab" -exec ls -la {} \; 2>/dev/null || true
         echo "=============================="
