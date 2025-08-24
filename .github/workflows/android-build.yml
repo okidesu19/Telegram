@@ -16,7 +16,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Setup JDK 17
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@v3
       with:
         distribution: 'temurin'
         java-version: '17'
@@ -28,19 +28,18 @@ jobs:
 
     - name: Setup Android SDK
       run: |
-        # Create Android SDK directory in user space
+        # Create Android SDK directory
         mkdir -p ~/android-sdk
         cd ~/android-sdk
         
         # Download and extract Android Command Line Tools
         ANDROID_SDK_URL="https://dl.google.com/android/repository/commandlinetools-linux-7302050_latest.zip"
         curl -o commandlinetools.zip $ANDROID_SDK_URL
-        unzip commandlinetools.zip
+        unzip commandlinetools.zip -d cmdline-tools
         rm commandlinetools.zip
         
-        # Create necessary directories
-        mkdir -p ~/android-sdk/cmdline-tools
-        mv cmdline-tools ~/android-sdk/cmdline-tools/latest
+        # Move to correct structure (new structure for commandline tools)
+        mv cmdline-tools/cmdline-tools cmdline-tools/latest
         
         # Set environment variables
         echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
@@ -54,6 +53,7 @@ jobs:
 
     - name: Install Android packages
       run: |
+        ~/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "cmdline-tools;latest"
         ~/android-sdk/cmdline-tools/latest/bin/sdkmanager --update
         ~/android-sdk/cmdline-tools/latest/bin/sdkmanager \
           "build-tools;30.0.3" \
@@ -92,7 +92,7 @@ jobs:
         mkdir -p TMessagesProj/build/outputs/native-debug-symbols
 
     - name: Build bundleBundleAfat_SDK23Release
-      run: ./gradlew :TMessagesProj_App:bundleBundleAfat_SDK23Release
+      run: ./gradlew :TMessagesProj_App:bundleBundleAfat_SDK23Release --no-daemon
       env:
         ANDROID_HOME: $HOME/android-sdk
         ANDROID_SDK_ROOT: $HOME/android-sdk
@@ -108,7 +108,7 @@ jobs:
         if-no-files-found: warn
 
     - name: Build bundleBundleAfatRelease
-      run: ./gradlew :TMessagesProj_App:bundleBundleAfatRelease
+      run: ./gradlew :TMessagesProj_App:bundleBundleAfatRelease --no-daemon
       env:
         ANDROID_HOME: $HOME/android-sdk
         ANDROID_SDK_ROOT: $HOME/android-sdk
@@ -124,7 +124,7 @@ jobs:
         if-no-files-found: warn
 
     - name: Build assembleAfatStandalone
-      run: ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone
+      run: ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone --no-daemon
       env:
         ANDROID_HOME: $HOME/android-sdk
         ANDROID_SDK_ROOT: $HOME/android-sdk
@@ -140,7 +140,7 @@ jobs:
         if-no-files-found: warn
 
     - name: Build assembleAfatRelease
-      run: ./gradlew :TMessagesProj_App:assembleAfatRelease
+      run: ./gradlew :TMessagesProj_App:assembleAfatRelease --no-daemon
       env:
         ANDROID_HOME: $HOME/android-sdk
         ANDROID_SDK_ROOT: $HOME/android-sdk
@@ -156,7 +156,7 @@ jobs:
         if-no-files-found: warn
 
     - name: Build Huawei assembleAfatRelease
-      run: ./gradlew :TMessagesProj_AppHuawei:assembleAfatRelease
+      run: ./gradlew :TMessagesProj_AppHuawei:assembleAfatRelease --no-daemon
       env:
         ANDROID_HOME: $HOME/android-sdk
         ANDROID_SDK_ROOT: $HOME/android-sdk
@@ -174,8 +174,12 @@ jobs:
     - name: Final artifacts summary
       run: |
         echo "=== Build Artifacts Summary ==="
-        find . -name "*.apk" -o -name "*.aab" | while read file; do
-          echo "Found: $file"
-          ls -la "$file"
-        done
+        echo "APK files:"
+        find . -name "*.apk" -exec ls -la {} \;
+        echo ""
+        echo "AAB files:"
+        find . -name "*.aab" -exec ls -la {} \;
+        echo ""
+        echo "Output directories:"
+        find . -name "outputs" -type d -exec ls -la {} \;
         echo "=============================="
