@@ -1,94 +1,108 @@
-name: Android Build with Docker
+name: Android Build
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main, master ]
-    tags: [ 'v*' ]
+    branches: [ master ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ master ]
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    container:
+      image: gradle:8.6.0-jdk17
+      options: --user root
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
-        submodules: recursive
 
-    - name: Setup Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Build Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: ./Dockerfile
-        tags: telegram-build:latest
-        load: true
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-    - name: Run Android build in container
+    - name: Setup Android SDK
       run: |
-        docker run \
-          --rm \
-          --workdir /home/gradle \
-          --memory=8g \
-          --memory-swap=8g \
-          --cpus=4 \
-          -v "$PWD":/home/source \
-          telegram-build:latest
+        apt-get update && apt-get install -y unzip
+        mkdir -p /usr/local/android-sdk-linux
+        cd /usr/local/android-sdk-linux
+        curl -o sdk.zip $ANDROID_SDK_URL
+        unzip sdk.zip
+        rm sdk.zip
+        yes | ./cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses
+        ./cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --update
+        ./cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME \
+          "build-tools;30.0.3" \
+          "build-tools;34.0.0" \
+          "platforms;android-34" \
+          "platform-tools" \
+          "ndk;21.4.7075529"
+        cp $ANDROID_HOME/build-tools/30.0.3/dx $ANDROID_HOME/build-tools/34.0.0/dx
+        cp $ANDROID_HOME/build-tools/30.0.3/lib/dx.jar $ANDROID_HOME/build-tools/34.0.0/lib/dx.jar
+      env:
+        ANDROID_SDK_URL: https://dl.google.com/android/repository/commandlinetools-linux-7302050_latest.zip
+        ANDROID_HOME: /usr/local/android-sdk-linux
+        ANDROID_NDK_VERSION: 21.4.7075529
 
-    - name: List build outputs
+    - name: Build bundleBundleAfat_SDK23Release
       run: |
-        echo "Build outputs:"
-        find . -name "*.apk" -o -name "*.aab" | head -20
-        du -sh TMessagesProj/build/outputs/ || true
+        gradle :TMessagesProj_App:bundleBundleAfat_SDK23Release
+      env:
+        ANDROID_HOME: /usr/local/android-sdk-linux
+        ANDROID_NDK_HOME: /usr/local/android-sdk-linux/ndk/21.4.7075529
+        PATH: $PATH:/usr/local/android-sdk-linux/tools:/usr/local/android-sdk-linux/platform-tools
 
-    - name: Upload APK artifacts
+    - name: Upload bundleBundleAfat_SDK23Release
       uses: actions/upload-artifact@v4
-      if: success()
       with:
-        name: android-apks
-        path: |
-          TMessagesProj/build/outputs/apk/**/*.apk
-        retention-days: 7
+        name: bundle-sdk23-release
+        path: TMessagesProj_App/build/outputs/
 
-    - name: Upload AAB artifacts
+    - name: Build bundleBundleAfatRelease
+      run: |
+        gradle :TMessagesProj_App:bundleBundleAfatRelease
+      env:
+        ANDROID_HOME: /usr/local/android-sdk-linux
+        ANDROID_NDK_HOME: /usr/local/android-sdk-linux/ndk/21.4.7075529
+
+    - name: Upload bundleBundleAfatRelease
       uses: actions/upload-artifact@v4
-      if: success()
       with:
-        name: android-aabs
-        path: |
-          TMessagesProj/build/outputs/bundle/**/*.aab
-        retention-days: 7
+        name: bundle-afat-release
+        path: TMessagesProj_App/build/outputs/
 
-    - name: Upload native debug symbols
+    - name: Build assembleAfatStandalone
+      run: |
+        gradle :TMessagesProj_AppStandalone:assembleAfatStandalone
+      env:
+        ANDROID_HOME: /usr/local/android-sdk-linux
+        ANDROID_NDK_HOME: /usr/local/android-sdk-linux/ndk/21.4.7075529
+
+    - name: Upload assembleAfatStandalone
       uses: actions/upload-artifact@v4
-      if: success()
       with:
-        name: native-debug-symbols
-        path: |
-          TMessagesProj/build/outputs/native-debug-symbols/**/*
-        retention-days: 7
+        name: afat-standalone
+        path: TMessagesProj_AppStandalone/build/outputs/
 
-    - name: Clean up Docker
+    - name: Build assembleAfatRelease
       run: |
-        docker system prune -a -f
-        sudo rm -rf /tmp/*
+        gradle :TMessagesProj_App:assembleAfatRelease
+      env:
+        ANDROID_HOME: /usr/local/android-sdk-linux
+        ANDROID_NDK_HOME: /usr/local/android-sdk-linux/ndk/21.4.7075529
 
-    - name: Notify success
-      if: success()
-      run: |
-        echo "✅ Build completed successfully!"
-        echo "Artifacts available in the artifacts section"
+    - name: Upload assembleAfatRelease
+      uses: actions/upload-artifact@v4
+      with:
+        name: afat-release
+        path: TMessagesProj_App/build/outputs/
 
-    - name: Notify failure
-      if: failure()
+    - name: Build Huawei assembleAfatRelease
       run: |
-        echo "❌ Build failed!"
-        exit 1
+        gradle :TMessagesProj_AppHuawei:assembleAfatRelease
+      env:
+        ANDROID_HOME: /usr/local/android-sdk-linux
+        ANDROID_NDK_HOME: /usr/local/android-sdk-linux/ndk/21.4.7075529
+
+    - name: Upload Huawei assembleAfatRelease
+      uses: actions/upload-artifact@v4
+      with:
+        name: huawei-afat-release
+        path: TMessagesProj_AppHuawei/build/outputs/
